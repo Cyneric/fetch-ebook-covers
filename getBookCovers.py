@@ -12,33 +12,71 @@ import zipfile
 from bs4 import BeautifulSoup
 import requests
 import sys
+import json
 
-# extracting isbn from .opf file inside the epub file and returning it
+
+
+GOOGLE_BOOKS_API_KEY = ""; # your google books api key here
+
+
+
+# extracting isbn from .opf file inside the epub file
 def extract_isbn(epub_path):
     print("extracting isbn: \033[94m" + os.path.basename(epub_path) + "\033[0m")
     
-    with zipfile.ZipFile(epub_path, 'r') as myzip:
-        for file in myzip.namelist():
-            if file.endswith('.opf'):
-                data = myzip.read(file).decode('utf-8')
-                soup = BeautifulSoup(data, 'xml')
-                isbn_node = soup.find('dc:identifier', attrs={'opf:scheme': 'ISBN'})
-                if isbn_node:
-                    isbn = isbn_node.text
+    try:
+        with zipfile.ZipFile(epub_path, 'r') as myzip:
+            for file in myzip.namelist():
+                if file.endswith('.opf'):
+                    data = myzip.read(file).decode('utf-8')
+                    soup = BeautifulSoup(data, 'xml')
+                    isbn_node = soup.find('dc:identifier', attrs={'opf:scheme': 'ISBN'})
+                    if isbn_node:
+                        isbn = isbn_node.text
 
-                    # Remove 'urn:isbn:' from the ISBN if it's there
-                    if isbn.startswith('urn:isbn:'):
-                        isbn = isbn[9:]
+                        # Remove 'urn:isbn:' from the ISBN if it's there
+                        if isbn.startswith('urn:isbn:'):
+                            isbn = isbn[9:]
 
-                    print("\t- found: \033[96m" + str(isbn) + "\033[0m")
+                        print("\t- found: \033[96m" + str(isbn) + "\033[0m")
 
-                    return isbn
-                
-                else: 
-                    print("\033[91m\t- no isbn found\033[0m")
+                        return isbn
+                    
+                    else: 
+                        print("\033[91m\t- no isbn found\033[0m")
+                        title_node = soup.find('dc:title')
+                        if title_node:
+                            title = title_node.text
+                            print("\t- trying to find isbn by title: \033[96m" + title + "\033[0m")
+                            isbn = get_isbn_from_title(title, GOOGLE_BOOKS_API_KEY)
+                            if isbn:
+                                print("\t- found: \033[96m" + str(isbn) + "\033[0m")
+                                return isbn
+                            else:
+                                print("\033[91m\t- no isbn found for title\033[0m")
 
-                print("_____________________________________________\n")
+    except FileNotFoundError:
+        print("\033[91m\t- File not found: \033[0m" + epub_path)
+
+    print("_____________________________________________\n")
+
     return None
+
+
+
+# searching for isbn by title on google books api
+def get_isbn_from_title(title, api_key):
+    response = requests.get(f'https://www.googleapis.com/books/v1/volumes?q={title}&key={api_key}')
+    data = json.loads(response.text)
+    if 'items' in data:
+        for item in data['items']:
+            if 'industryIdentifiers' in item['volumeInfo']:
+                for identifier in item['volumeInfo']['industryIdentifiers']:
+                    if identifier['type'] == 'ISBN_13':
+                        return identifier['identifier']
+    return None
+
+
 
 # downloading cover and saving it to the output_path
 def download_cover(isbn, output_path):
@@ -62,6 +100,7 @@ def download_cover(isbn, output_path):
         out_file.write(response.content)
 
         print("\033[1;92m\t- done! cover saved to: " + output_path + "\033[0m")
+
 
 
 # searching recursively over a directory and its subdirectories for epub files and calling extract_isbn and download_cover on them
