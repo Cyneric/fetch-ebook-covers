@@ -66,7 +66,7 @@ def extract_isbn(epub_path):
 
 # searching for isbn by title on google books api
 def get_isbn_from_title(title, api_key):
-    response = requests.get(f'https://www.googleapis.com/books/v1/volumes?q={title}&key={api_key}')
+    response = requests.get(f'https://www.googleapis.com/books/v1/volumes?q={title}' + (f'&key={api_key}' if api_key else ''))
     data = json.loads(response.text)
     if 'items' in data:
         for item in data['items']:
