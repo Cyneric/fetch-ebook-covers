@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import requests
 import sys
 import json
+import re
 
 
 
@@ -22,7 +23,7 @@ GOOGLE_BOOKS_API_KEY = ""; # your google books api key here
 
 # extracting isbn from .opf file inside the epub file
 def extract_isbn(epub_path):
-    print("extracting isbn: \033[94m" + os.path.basename(epub_path) + "\033[0m")
+    print("\t- extracting isbn fom .epub container")
     
     try:
         with zipfile.ZipFile(epub_path, 'r') as myzip:
@@ -48,7 +49,14 @@ def extract_isbn(epub_path):
                         if title_node:
                             title = title_node.text
                             print("\t- trying to find isbn by title: \033[96m" + title + "\033[0m")
-                            isbn = get_isbn_from_title(title, GOOGLE_BOOKS_API_KEY)
+
+
+                            # Extract the author from the file path and Extract the year from the directory name
+                            author = os.path.dirname(epub_path).split(os.path.sep)[2]
+                            match = re.search(r'\((.*?)\)', os.path.dirname(epub_path))
+                            year = match.group(1) if match else None
+
+                            isbn = get_isbn_from_title(author, title, year, GOOGLE_BOOKS_API_KEY)
                             if isbn:
                                 print("\t- found: \033[96m" + str(isbn) + "\033[0m")
                                 return isbn
@@ -65,8 +73,18 @@ def extract_isbn(epub_path):
 
 
 # searching for isbn by title on google books api
-def get_isbn_from_title(title, api_key):
-    response = requests.get(f'https://www.googleapis.com/books/v1/volumes?q={title}' + (f'&key={api_key}' if api_key else ''))
+def get_isbn_from_title(author, title, year, api_key):
+    query = f'https://www.googleapis.com/books/v1/volumes?q={title}'
+    if  author:
+        query += f'+inauthor:{author}'
+    # if year:
+        # query += f'+inpublisher:{year}'
+    if api_key:
+        query += f'&key={api_key}'
+    
+
+    print("\t- query: \033[96m" + query + "\033[0m") # debug!
+    response = requests.get(query)    
     data = json.loads(response.text)
     if 'items' in data:
         for item in data['items']:
@@ -80,10 +98,6 @@ def get_isbn_from_title(title, api_key):
 
 # downloading cover and saving it to the output_path
 def download_cover(isbn, output_path):
-    # Check if the file already exists
-    if os.path.isfile(output_path):
-        print("\033[93m\t- cover already exists, skipping download\033[0m")
-        return
 
     url = f'https://buch.isbn.de/gross/{isbn}.jpg'
     response = requests.get(url)
@@ -107,14 +121,25 @@ def download_cover(isbn, output_path):
 def search_directory(directory):
     for root, dirs, files in os.walk(directory):
         for file in files:
+            cover_path = os.path.join(root, 'cover.jpg')
+
             if file.endswith('.epub'):
                 epub_path = os.path.join(root, file)
+
+                print("\033[94m Started processing file: " + os.path.basename(epub_path) + "\033[0m")
+
+
+                # Check if the file already exists and skip it if it does
+                if os.path.isfile(cover_path):
+                    print("\033[93m\t- cover already exists, skipping download\033[0m")
+                    print("_____________________________________________\n")
+
+                    continue
+
                 isbn = extract_isbn(epub_path)
                 if isbn:
 
                     print("\t- get cover for isbn: \033[96m" + str(isbn) + "\033[0m")
-
-                    cover_path = os.path.join(root, 'cover.jpg')
                     download_cover(isbn, cover_path)
 
                     print("_____________________________________________\n")
