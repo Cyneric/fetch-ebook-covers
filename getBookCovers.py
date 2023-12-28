@@ -1,3 +1,6 @@
+# @Author: Christian Blank <git@cyneric.de>
+# @License: Open Source (GPL3)
+
 # python script to run recursively over a folder and its subfolders to extract isbns from epub files and download book cover from openlibrary.org and place them besides the epub files named as cover.jpg
 
 # dependencies: BeautifulSoup, requests, lxml (pip install them if you don't have them already)
@@ -76,14 +79,17 @@ def extract_isbn(epub_path):
 def get_isbn_from_title(author, title, year, api_key):
     query = f'https://www.googleapis.com/books/v1/volumes?q={title}'
     if  author:
-        query += f'+inauthor:{author}'
-    # if year:
+        query += f' {author}'
+        # query += f'+inauthor:{author}'
+    if year:
+        query += f' ({year})'
         # query += f'+inpublisher:{year}'
+
     if api_key:
         query += f'&key={api_key}'
     
 
-    print("\t- query: \033[96m" + query + "\033[0m") # debug!
+    print("\t- request: \033[96m" + query + "\033[0m") # debug!
     response = requests.get(query)    
     data = json.loads(response.text)
     if 'items' in data:
@@ -99,6 +105,7 @@ def get_isbn_from_title(author, title, year, api_key):
 # downloading cover and saving it to the output_path
 def download_cover(isbn, output_path):
 
+    # try downloading from buch.isbn.de  
     url = f'https://buch.isbn.de/gross/{isbn}.jpg'
     response = requests.get(url)
 
@@ -108,7 +115,43 @@ def download_cover(isbn, output_path):
     md5_hash.update(response.content)
     if md5_hash.hexdigest() == 'f81b2d84d8a69ba9e8bf1f50c806faab':
         print("\033[93m\t- generic cover image detected, skipping\033[0m")
-        return
+        
+         # Alternatively try downloading from openlibrary.org
+        url = f'http://covers.openlibrary.org/b/isbn/{isbn}-L.jpg'
+        response = requests.get(url)
+        
+        print("\t- trying alternative source: \033[96m" + url + "\033[0m")
+
+        md5_hash = hashlib.md5()
+        md5_hash.update(response.content)
+        if md5_hash.hexdigest() == '0d23d0b62908b75e89014ac3f864484e':
+            print("\033[93m\t- generic cover image detected, skipping\033[0m")
+            
+            
+            # Try downloading from Google Books API
+            url = f'https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}'
+            response = requests.get(url)
+
+            print("\t- trying alternative source: \033[96m" + url + "\033[0m")
+
+            response_data = response.json()
+
+            if 'items' in response_data:
+                image_links = response_data['items'][0]['volumeInfo'].get('imageLinks', {})
+                if 'thumbnail' in image_links:
+                    image_url = image_links['thumbnail']
+                    response = requests.get(image_url)
+
+                else:
+                    print("\033[91m\t- no cover found\033[0m")
+                    return
+            else:
+                print("\033[91m\t- no cover found\033[0m")
+                return
+
+        if response.status_code != 200:
+            print("\033[91m\t- no cover found\033[0m")
+            return
 
     with open(output_path, 'wb') as out_file:
         out_file.write(response.content)
