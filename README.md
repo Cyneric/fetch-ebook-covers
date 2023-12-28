@@ -1,4 +1,5 @@
 Author: Christian Blank <git@cyneric.de>
+
 License: Open Source (GPL3)
 
 python script to run recursively over a folder and its subfolders to extract isbns from epub files and download book cover and place them besides the epub files named as cover.jpg
