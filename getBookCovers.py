@@ -18,42 +18,47 @@ import sys
 import json
 import re
 
-GOOGLE_BOOKS_API_KEY = ""  # your google books api key here *optional*
+
+# your google books api key here *optional*
+GOOGLE_BOOKS_API_KEY = ""
+
+# md5 hashes of generic cover images
+GENERIC_COVER_HASHES = ["f81b2d84d8a69ba9e8bf1f50c806faab", "0d23d0b62908b75e89014ac3f864484e"]
 
 
 # Search the directory and its subfolders for EPUB files
 def search_directory(directory):
     for root, dirs, files in os.walk(directory):
         for file in files:
-            cover_path = os.path.join(root, "cover.jpg")
-
             if file.endswith(".epub"):
-                epub_path = os.path.join(root, file)
-
-                print(f"\033[94m Started processing file: {os.path.basename(epub_path)}\033[0m")
-
-                if os.path.isfile(cover_path):
-                    print("\033[93m\t- cover already exists, skipping download\033[0m")
-                    print("_____________________________________________\n")
-                    continue
-
-                isbn = extract_isbn(epub_path)
-                if isbn:
-                    print(f"\t- get cover for isbn: \033[96m{isbn}\033[0m")
-                    download_cover(isbn, cover_path)
-                    print("_____________________________________________\n")
+                process_epub_file(root, file)
 
 
-# Download the book cover based on the ISBN
+# Process the EPUB file
+def process_epub_file(root, file):
+    epub_path = os.path.join(root, file)
+    cover_path = os.path.join(root, "cover.jpg")
+
+    print(f"\033[94m Started processing file: {os.path.basename(epub_path)}\033[0m")
+
+    if os.path.isfile(cover_path):
+        print("\033[93m\t- cover already exists, skipping download\033[0m")
+        print("_____________________________________________\n")
+        return
+
+    isbn = extract_isbn(epub_path)
+    if isbn:
+        print(f"\t- get cover for isbn: \033[96m{isbn}\033[0m")
+        download_cover(isbn, cover_path)
+        print("_____________________________________________\n")
+
+
+# Download the cover image
 def download_cover(isbn, output_path):
-    response = get_cover_from_buch_isbn_de(isbn)
+    response = get_cover_from_buch_isbn_de(isbn) or get_cover_from_openlibrary(isbn) or get_cover_from_google_books(isbn)
     if response is None:
-        response = get_cover_from_openlibrary(isbn)
-        if response is None:
-            response = get_cover_from_google_books(isbn)
-            if response is None:
-                print("\033[91m\t- no cover found\033[0m")
-                return
+        print("\033[91m\t- no cover found\033[0m")
+        return
 
     save_cover(response, output_path)
 
@@ -118,34 +123,35 @@ def get_isbn_from_title(author, title, year, api_key):
     return None
 
 
+# Download the book cover from a given URL
+def download_cover_from_url(url):
+    print(f"\t- downloading from url: \033[96m{url}\033[0m")
+    try:
+        response = requests.get(url)
+        md5_hash = hashlib.md5()
+        md5_hash.update(response.content)
+        if md5_hash.hexdigest() in GENERIC_COVER_HASHES:
+            print("\033[93m\t- generic cover image detected, skipping\033[0m")
+            return None
+        if response.status_code != 200:
+            return None
+        return response.content
+    except Exception as e:
+        print(f"\033[91m\t- Error downloading cover: {e}\033[0m")
+        return None
+
+
 # Download the book cover from buch.isbn.de
 def get_cover_from_buch_isbn_de(isbn):
     url = f"https://buch.isbn.de/gross/{isbn}.jpg"
-    print(f"\t- downloading from url: \033[96m{url}\033[0m")
-    response = requests.get(url)
-    md5_hash = hashlib.md5()
-    md5_hash.update(response.content)
-    if md5_hash.hexdigest() == "f81b2d84d8a69ba9e8bf1f50c806faab":
-        print("\033[93m\t- generic cover image detected, skipping\033[0m")
-        return None
-    if response.status_code != 200:
-        return None
-    return response.content
+    return download_cover_from_url(url)
 
 
 # Download the book cover from openlibrary.org
 def get_cover_from_openlibrary(isbn):
     url = f"http://covers.openlibrary.org/b/isbn/{isbn}-L.jpg"
-    print(f"\t- downloading from url: \033[96m{url}\033[0m")
-    response = requests.get(url)
-    md5_hash = hashlib.md5()
-    md5_hash.update(response.content)
-    if md5_hash.hexdigest() == "0d23d0b62908b75e89014ac3f864484e":
-        print("\033[93m\t- generic cover image detected, skipping\033[0m")
-        return None
-    if response.status_code != 200:
-        return None
-    return response.content
+    return download_cover_from_url(url)
+
 
 # Download the book cover from google books
 def get_cover_from_google_books(isbn):
@@ -173,6 +179,7 @@ def save_cover(content, output_path):
         print(f"\033[1;92m\t- done! cover saved to: {output_path}\033[0m")
 
 
+# Check if the script is called with a path argument and start the script
 if len(sys.argv) != 2:
     print("Usage: python getBookCovers.py <path to folder>")
     sys.exit(1)
