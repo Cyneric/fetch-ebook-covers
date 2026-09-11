@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fetch-ebook-covers"
+version = "1.0.0"
+description = "Fetch missing EPUB covers or extract embedded artwork"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Christian Blank", email = "christianblank91@gmail.com"}]
+dependencies = ["requests>=2.32.5,<3", "Pillow>=11.3,<13", "defusedxml>=0.7.1,<1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1", "build>=1.2,<2"]
+
+[project.scripts]
+fetch-ebook-covers = "fetch_ebook_covers.cli:main"
+
+[project.urls]
+Repository = "https://github.com/Cyneric/fetch-ebook-covers"
+
+[tool.setuptools.packages.find]
+include = ["fetch_ebook_covers*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
