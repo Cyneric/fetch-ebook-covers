@@ -1,0 +1,2 @@
+include getBookCovers.py requirements.txt
+recursive-include tests *.py

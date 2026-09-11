@@ -1,0 +1,42 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m ruff check .
+      - run: python -m ruff format --check .
+      - run: python -m pytest
+      - run: python -m build
+
+  installed-smoke:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install build
+      - run: python -m build
+      - run: python -m venv "$RUNNER_TEMP/covers-venv"
+      - run: '"$RUNNER_TEMP/covers-venv/bin/python" -m pip install dist/*.whl'
+      - run: 'cd "$RUNNER_TEMP" && "$RUNNER_TEMP/covers-venv/bin/fetch-ebook-covers" --help'
+      - run: 'cd "$RUNNER_TEMP" && "$RUNNER_TEMP/covers-venv/bin/python" -m fetch_ebook_covers --version'
+      - run: 'cd "$RUNNER_TEMP" && "$RUNNER_TEMP/covers-venv/bin/python" "$GITHUB_WORKSPACE/tests/smoke_installed.py"'
